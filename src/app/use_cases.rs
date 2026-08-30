@@ -63,8 +63,8 @@ impl<'a> RepositoryUseCase<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
     use crate::domain::{HeadState, SyncStatus, WorkingTreeStatus, WorktreeInfo};
+    use std::cell::RefCell;
 
     struct FakeRepository {
         branches: RefCell<Vec<BranchRecord>>,
@@ -160,7 +160,10 @@ mod tests {
                 return Err("fake error: diff_stat failed".into());
             }
             let location = worktree_path.unwrap_or(branch_name);
-            Ok(format!(" 1 file changed, 5 insertions(+), 2 deletions(-) @ {}", location))
+            Ok(format!(
+                " 1 file changed, 5 insertions(+), 2 deletions(-) @ {}",
+                location
+            ))
         }
 
         fn repository_root(&self) -> RepositoryResult<String> {
@@ -310,7 +313,9 @@ mod tests {
         let fake = FakeRepository::new(vec![]);
         let use_case = RepositoryUseCase::new(&fake);
 
-        use_case.add_worktree("feature", "/tmp/repo-feature").unwrap();
+        use_case
+            .add_worktree("feature", "/tmp/repo-feature")
+            .unwrap();
         use_case.remove_worktree("/tmp/repo-feature").unwrap();
 
         let operations = fake.get_committed_operations();
@@ -343,7 +348,9 @@ mod tests {
         let diff = use_case.get_diff_stat(None, "main").unwrap();
         assert!(diff.contains("@ main"));
 
-        let diff_with_worktree = use_case.get_diff_stat(Some("/tmp/repo-main"), "main").unwrap();
+        let diff_with_worktree = use_case
+            .get_diff_stat(Some("/tmp/repo-main"), "main")
+            .unwrap();
         assert!(diff_with_worktree.contains("@ /tmp/repo-main"));
     }
 
