@@ -57,8 +57,4 @@ impl BranchRecord {
             .as_ref()
             .map_or(WorkingTreeStatus::Unknown, |w| w.status)
     }
-
-    pub fn is_dirty(&self) -> Option<bool> {
-        self.working_tree_status().is_dirty()
-    }
 }

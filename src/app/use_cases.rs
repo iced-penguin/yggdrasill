@@ -1,6 +1,5 @@
 use crate::app::branch_list_item::BranchListItem;
 use crate::app::port::{GitRepositoryPort, RepositoryResult};
-use crate::domain::BranchRecord;
 
 pub struct RepositoryUseCase<'a> {
     repo: &'a dyn GitRepositoryPort,

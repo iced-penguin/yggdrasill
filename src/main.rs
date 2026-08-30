@@ -14,7 +14,6 @@ mod infrastructure;
 mod ui;
 
 use app::action::AppAction;
-use app::port::GitRepositoryPort;
 use app::state::*;
 use app::use_cases::RepositoryUseCase;
 use infrastructure::GitCliRepository;

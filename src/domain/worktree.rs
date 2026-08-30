@@ -13,14 +13,6 @@ impl WorkingTreeStatus {
             Self::Unknown => None,
         }
     }
-
-    pub fn from_dirty_bool(is_dirty: Option<bool>) -> Self {
-        match is_dirty {
-            Some(true) => Self::Modified,
-            Some(false) => Self::Clean,
-            None => Self::Unknown,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
