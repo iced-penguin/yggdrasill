@@ -62,7 +62,7 @@ impl<'a> RepositoryUseCase<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{HeadState, SyncStatus, WorkingTreeStatus, WorktreeInfo};
+    use crate::domain::{BranchRecord, HeadState, WorkingTreeStatus, WorktreeInfo};
     use std::cell::RefCell;
 
     struct FakeRepository {
@@ -80,7 +80,7 @@ mod tests {
             }
         }
 
-        fn with_failure(mut self) -> Self {
+        fn with_failure(self) -> Self {
             *self.should_fail.borrow_mut() = true;
             self
         }
