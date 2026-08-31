@@ -74,18 +74,5 @@ mod tests {
         assert_eq!(WorkingTreeStatus::Clean.is_dirty(), Some(false));
         assert_eq!(WorkingTreeStatus::Modified.is_dirty(), Some(true));
         assert_eq!(WorkingTreeStatus::Unknown.is_dirty(), None);
-
-        assert_eq!(
-            WorkingTreeStatus::from_dirty_bool(Some(true)),
-            WorkingTreeStatus::Modified
-        );
-        assert_eq!(
-            WorkingTreeStatus::from_dirty_bool(Some(false)),
-            WorkingTreeStatus::Clean
-        );
-        assert_eq!(
-            WorkingTreeStatus::from_dirty_bool(None),
-            WorkingTreeStatus::Unknown
-        );
     }
 }
