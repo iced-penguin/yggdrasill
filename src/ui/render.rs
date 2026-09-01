@@ -202,10 +202,7 @@ pub fn render_filter(
                 total_count,
             )
         }
-        None => format!(
-            "/  Filter branches and worktrees  {} branches",
-            total_count,
-        ),
+        None => format!("/  Filter branches and worktrees  {} branches", total_count,),
     };
     let filter_style = if filtering {
         Style::default()
