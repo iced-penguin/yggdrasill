@@ -112,7 +112,6 @@ impl TuiApp {
                         .worktree_path
                         .as_deref()
                         .is_some_and(|path| path.to_ascii_lowercase().contains(&query))
-                    || entry.commit_subject.to_ascii_lowercase().contains(&query)
             })
             .cloned()
             .collect();
@@ -120,7 +119,8 @@ impl TuiApp {
             .as_ref()
             .and_then(|name| self.entries.iter().position(|entry| &entry.name == name))
             .or_else(|| {
-                (!self.entries.is_empty()).then_some(previous_index.min(self.entries.len() - 1))
+                (!self.entries.is_empty())
+                    .then(|| previous_index.min(self.entries.len().saturating_sub(1)))
             });
         self.table_state.select(selected_index);
     }
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_matches_branch_path_and_subject() {
+    fn filter_matches_branch_name_and_worktree_path() {
         let mut path_entry = entry("other", false, None);
         path_entry.worktree_path = Some(String::from("/tmp/project-feature"));
         let mut subject_entry = entry("third", false, None);
@@ -260,8 +260,7 @@ mod tests {
         assert_eq!(app.entries[0].name, "other");
 
         app.update_filter(Some(String::from("checkout")));
-        assert_eq!(app.entries.len(), 1);
-        assert_eq!(app.entries[0].name, "third");
+        assert!(app.entries.is_empty());
     }
 
     #[test]
