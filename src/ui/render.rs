@@ -203,7 +203,7 @@ pub fn render_filter(
             )
         }
         None => format!(
-            "/  Filter branches, worktrees, and commits  {} branches",
+            "/  Filter branches and worktrees  {} branches",
             total_count,
         ),
     };
