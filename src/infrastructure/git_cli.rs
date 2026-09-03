@@ -232,23 +232,6 @@ impl GitRepositoryPort for GitCliRepository {
         }
         Ok(path)
     }
-
-    fn default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String> {
-        let root_path = self.repository_root()?;
-        let root = Path::new(&root_path);
-        let parent = root.parent().ok_or("repository has no parent directory")?;
-        let repository_name = root
-            .file_name()
-            .and_then(|name| name.to_str())
-            .ok_or("invalid repository name")?;
-        Ok(parent
-            .join(format!(
-                "{repository_name}-{}",
-                branch_name.replace('/', "-")
-            ))
-            .display()
-            .to_string())
-    }
 }
 
 impl GitCliRepository {

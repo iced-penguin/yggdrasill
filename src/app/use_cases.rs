@@ -50,12 +50,50 @@ impl<'a> RepositoryUseCase<'a> {
         self.repo.diff_stat(worktree_path, branch_name)
     }
 
-    pub fn get_default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String> {
-        self.repo.default_worktree_path(branch_name)
+    pub fn get_worktree_path(
+        &self,
+        branch_name: &str,
+        path_template: &str,
+        base_directory: Option<&str>,
+    ) -> RepositoryResult<String> {
+        let repository_root = self.repo.repository_root()?;
+        let repository_root = std::path::Path::new(&repository_root);
+        let repository_name = repository_root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or("invalid repository name")?;
+        let branch_slug = branch_name.replace('/', "-");
+        let path = path_template
+            .replace("{repo}", repository_name)
+            .replace("{branch}", branch_name)
+            .replace("{branch_slug}", &branch_slug);
+        let base = match base_directory {
+            Some(directory) => expand_home_directory(directory)?,
+            None => repository_root
+                .parent()
+                .ok_or("repository has no parent directory")?
+                .to_path_buf(),
+        };
+        Ok(base.join(path).display().to_string())
     }
 
     pub fn get_repository_root(&self) -> RepositoryResult<String> {
         self.repo.repository_root()
+    }
+}
+
+fn expand_home_directory(directory: &str) -> RepositoryResult<std::path::PathBuf> {
+    let suffix = if directory == "~" {
+        Some("")
+    } else {
+        directory.strip_prefix("~/")
+    };
+    match suffix {
+        Some(suffix) => {
+            let home = std::env::var_os("HOME").ok_or("HOME environment variable is not set")?;
+            Ok(std::path::PathBuf::from(home).join(suffix))
+        }
+        None => Ok(std::path::PathBuf::from(directory)),
     }
 }
 
@@ -170,13 +208,6 @@ mod tests {
                 return Err("fake error: repository_root failed".into());
             }
             Ok(String::from("/tmp/repo"))
-        }
-
-        fn default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String> {
-            if *self.should_fail.borrow() {
-                return Err("fake error: default_worktree_path failed".into());
-            }
-            Ok(format!("/tmp/repo-{}", branch_name))
         }
     }
 
@@ -363,12 +394,49 @@ mod tests {
     }
 
     #[test]
-    fn get_default_worktree_path_formats_correctly() {
+    fn get_worktree_path_applies_template() {
         let fake = FakeRepository::new(vec![]);
         let use_case = RepositoryUseCase::new(&fake);
-        let path = use_case.get_default_worktree_path("feature/test").unwrap();
+        let path = use_case
+            .get_worktree_path("feature/test", "{repo}-{branch_slug}", None)
+            .unwrap();
 
-        assert_eq!(path, "/tmp/repo-feature/test");
+        assert_eq!(path, "/tmp/repo-feature-test");
+    }
+
+    #[test]
+    fn get_worktree_path_supports_branch_name_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let path = use_case
+            .get_worktree_path("feature/test", "worktrees/{branch}", None)
+            .unwrap();
+
+        assert_eq!(path, "/tmp/worktrees/feature/test");
+    }
+
+    #[test]
+    fn get_worktree_path_uses_configured_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let path = use_case
+            .get_worktree_path("feature/test", "{repo}-{branch_slug}", Some("/var/wt"))
+            .unwrap();
+
+        assert_eq!(path, "/var/wt/repo-feature-test");
+    }
+
+    #[test]
+    fn get_worktree_path_expands_home_in_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let home = std::env::var_os("HOME").expect("HOME must be set for this test");
+        let expected = std::path::PathBuf::from(home).join("wt/repo-feature-test");
+        let path = use_case
+            .get_worktree_path("feature/test", "{repo}-{branch_slug}", Some("~/wt"))
+            .unwrap();
+
+        assert_eq!(path, expected.display().to_string());
     }
 
     #[test]

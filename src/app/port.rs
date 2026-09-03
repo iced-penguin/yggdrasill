@@ -13,5 +13,4 @@ pub trait GitRepositoryPort {
     fn diff_stat(&self, worktree_path: Option<&str>, branch_name: &str)
     -> RepositoryResult<String>;
     fn repository_root(&self) -> RepositoryResult<String>;
-    fn default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String>;
 }
