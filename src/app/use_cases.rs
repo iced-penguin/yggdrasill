@@ -451,8 +451,7 @@ mod tests {
     fn get_worktree_path_rejects_absolute_path_template() {
         let fake = FakeRepository::new(vec![]);
         let use_case = RepositoryUseCase::new(&fake);
-        let result = use_case
-            .get_worktree_path("feature/test", "/tmp/{repo}-{branch_slug}", None);
+        let result = use_case.get_worktree_path("feature/test", "/tmp/{repo}-{branch_slug}", None);
 
         assert!(result.is_err());
     }
