@@ -87,6 +87,13 @@ impl<'a> RepositoryUseCase<'a> {
 }
 
 fn expand_home_directory(directory: &str) -> RepositoryResult<std::path::PathBuf> {
+    expand_home_directory_with_home(directory, std::env::var_os("HOME").as_deref())
+}
+
+fn expand_home_directory_with_home(
+    directory: &str,
+    home: Option<&std::ffi::OsStr>,
+) -> RepositoryResult<std::path::PathBuf> {
     let suffix = if directory == "~" {
         Some("")
     } else {
@@ -94,7 +101,7 @@ fn expand_home_directory(directory: &str) -> RepositoryResult<std::path::PathBuf
     };
     match suffix {
         Some(suffix) => {
-            let home = std::env::var_os("HOME").ok_or("HOME environment variable is not set")?;
+            let home = home.ok_or("HOME environment variable is not set")?;
             Ok(std::path::PathBuf::from(home).join(suffix))
         }
         None => Ok(std::path::PathBuf::from(directory)),
@@ -432,15 +439,36 @@ mod tests {
 
     #[test]
     fn get_worktree_path_expands_home_in_base_directory() {
-        let fake = FakeRepository::new(vec![]);
-        let use_case = RepositoryUseCase::new(&fake);
-        let home = std::env::var_os("HOME").expect("HOME must be set for this test");
+        let home = std::ffi::OsStr::new("/tmp/test-home");
+        let base = expand_home_directory_with_home("~/wt", Some(home)).unwrap();
         let expected = std::path::PathBuf::from(home).join("wt/repo-feature-test");
-        let path = use_case
-            .get_worktree_path("feature/test", "{repo}-{branch_slug}", Some("~/wt"))
-            .unwrap();
+        let path = base.join("repo-feature-test").display().to_string();
 
         assert_eq!(path, expected.display().to_string());
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_absolute_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case
+            .get_worktree_path("feature/test", "/tmp/{repo}-{branch_slug}", None);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn expand_home_directory_requires_home_for_tilde_paths() {
+        let result = expand_home_directory_with_home("~/wt", None);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn expand_home_directory_leaves_non_tilde_paths_unchanged_without_home() {
+        let path = expand_home_directory_with_home("relative/wt", None).unwrap();
+
+        assert_eq!(path, std::path::PathBuf::from("relative/wt"));
     }
 
     #[test]
