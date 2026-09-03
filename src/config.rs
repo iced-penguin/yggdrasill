@@ -43,10 +43,9 @@ impl Config {
 }
 
 fn config_path() -> Option<PathBuf> {
-    config_path_from_dirs(
-        env::var_os("XDG_CONFIG_HOME").as_deref(),
-        env::var_os("HOME").as_deref(),
-    )
+    let xdg_config_home = env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty());
+    let home = env::var_os("HOME").filter(|v| !v.is_empty());
+    config_path_from_dirs(xdg_config_home.as_deref(), home.as_deref())
 }
 
 fn config_path_from_dirs(
