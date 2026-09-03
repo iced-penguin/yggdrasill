@@ -67,6 +67,10 @@ impl<'a> RepositoryUseCase<'a> {
             .replace("{repo}", repository_name)
             .replace("{branch}", branch_name)
             .replace("{branch_slug}", &branch_slug);
+        let path = std::path::PathBuf::from(path);
+        if path.is_absolute() {
+            return Err("worktree.path_template must be a relative path".into());
+        }
         let base = match base_directory {
             Some(directory) => expand_home_directory(directory)?,
             None => repository_root
