@@ -1,5 +1,6 @@
 use crate::app::branch_list_item::BranchListItem;
 use crate::app::port::{GitRepositoryPort, RepositoryResult};
+use crate::app::template::render_template;
 
 pub struct RepositoryUseCase<'a> {
     repo: &'a dyn GitRepositoryPort,
@@ -63,10 +64,12 @@ impl<'a> RepositoryUseCase<'a> {
             .and_then(|name| name.to_str())
             .ok_or("invalid repository name")?;
         let branch_slug = branch_name.replace('/', "-");
-        let path = path_template
-            .replace("{repo}", repository_name)
-            .replace("{branch}", branch_name)
-            .replace("{branch_slug}", &branch_slug);
+        let path = render_template(path_template, |name| match name {
+            "repo" => Some(repository_name),
+            "branch" => Some(branch_name),
+            "branch_slug" => Some(&branch_slug),
+            _ => None,
+        })?;
         let path = std::path::PathBuf::from(path);
         if path.is_absolute() {
             return Err("worktree.path_template must be a relative path".into());
