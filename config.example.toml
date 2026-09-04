@@ -5,7 +5,7 @@
 [worktree]
 # Base directory where new worktrees are created.
 # Defaults to the directory containing the current repository, so worktrees
-# are placed next to it. A leading "~" expands to your home directory.
+# are placed next to it. A leading "~/" expands to your home directory.
 # directory = "~/worktrees"
 
 # Template for the worktree path, relative to the directory above.
