@@ -1,5 +1,6 @@
 use crate::app::branch_list_item::BranchListItem;
 use crate::app::port::{GitRepositoryPort, RepositoryResult};
+use crate::app::template::render_template;
 
 pub struct RepositoryUseCase<'a> {
     repo: &'a dyn GitRepositoryPort,
@@ -50,12 +51,73 @@ impl<'a> RepositoryUseCase<'a> {
         self.repo.diff_stat(worktree_path, branch_name)
     }
 
-    pub fn get_default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String> {
-        self.repo.default_worktree_path(branch_name)
+    pub fn get_worktree_path(
+        &self,
+        branch_name: &str,
+        path_template: &str,
+        base_directory: Option<&str>,
+    ) -> RepositoryResult<String> {
+        if path_template.trim().is_empty() {
+            return Err("worktree.path_template must not be empty".into());
+        }
+        if base_directory.is_some_and(|directory| directory.trim().is_empty()) {
+            return Err("worktree.directory must not be empty".into());
+        }
+
+        let repository_root = self.repo.repository_root()?;
+        let repository_root = std::path::Path::new(&repository_root);
+        let repository_name = repository_root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or("invalid repository name")?;
+        let branch_slug = branch_name.replace('/', "-");
+        let path = render_template(path_template, |name| match name {
+            "repo" => Some(repository_name),
+            "branch" => Some(branch_name),
+            "branch_slug" => Some(&branch_slug),
+            _ => None,
+        })?;
+        if path.trim().is_empty() {
+            return Err("rendered worktree path must not be empty".into());
+        }
+        let path = std::path::PathBuf::from(path);
+        if path.is_absolute() {
+            return Err("worktree.path_template must be a relative path".into());
+        }
+        let base = match base_directory {
+            Some(directory) => expand_home_directory(directory)?,
+            None => repository_root
+                .parent()
+                .ok_or("repository has no parent directory")?
+                .to_path_buf(),
+        };
+        Ok(base.join(path).display().to_string())
     }
 
     pub fn get_repository_root(&self) -> RepositoryResult<String> {
         self.repo.repository_root()
+    }
+}
+
+fn expand_home_directory(directory: &str) -> RepositoryResult<std::path::PathBuf> {
+    expand_home_directory_with_home(directory, std::env::var_os("HOME").as_deref())
+}
+
+fn expand_home_directory_with_home(
+    directory: &str,
+    home: Option<&std::ffi::OsStr>,
+) -> RepositoryResult<std::path::PathBuf> {
+    let suffix = if directory == "~" {
+        Some("")
+    } else {
+        directory.strip_prefix("~/")
+    };
+    match suffix {
+        Some(suffix) => {
+            let home = home.ok_or("HOME environment variable is not set")?;
+            Ok(std::path::PathBuf::from(home).join(suffix))
+        }
+        None => Ok(std::path::PathBuf::from(directory)),
     }
 }
 
@@ -170,13 +232,6 @@ mod tests {
                 return Err("fake error: repository_root failed".into());
             }
             Ok(String::from("/tmp/repo"))
-        }
-
-        fn default_worktree_path(&self, branch_name: &str) -> RepositoryResult<String> {
-            if *self.should_fail.borrow() {
-                return Err("fake error: default_worktree_path failed".into());
-            }
-            Ok(format!("/tmp/repo-{}", branch_name))
         }
     }
 
@@ -363,12 +418,141 @@ mod tests {
     }
 
     #[test]
-    fn get_default_worktree_path_formats_correctly() {
+    fn get_worktree_path_applies_template() {
         let fake = FakeRepository::new(vec![]);
         let use_case = RepositoryUseCase::new(&fake);
-        let path = use_case.get_default_worktree_path("feature/test").unwrap();
+        let path = use_case
+            .get_worktree_path("feature/test", "{repo}-{branch_slug}", None)
+            .unwrap();
 
-        assert_eq!(path, "/tmp/repo-feature/test");
+        assert_eq!(path, "/tmp/repo-feature-test");
+    }
+
+    #[test]
+    fn get_worktree_path_supports_branch_name_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let path = use_case
+            .get_worktree_path("feature/test", "worktrees/{branch}", None)
+            .unwrap();
+
+        assert_eq!(path, "/tmp/worktrees/feature/test");
+    }
+
+    #[test]
+    fn get_worktree_path_uses_configured_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let path = use_case
+            .get_worktree_path("feature/test", "{repo}-{branch_slug}", Some("/var/wt"))
+            .unwrap();
+
+        assert_eq!(path, "/var/wt/repo-feature-test");
+    }
+
+    #[test]
+    fn get_worktree_path_expands_home_in_base_directory() {
+        let home = std::ffi::OsStr::new("/tmp/test-home");
+        let base = expand_home_directory_with_home("~/wt", Some(home)).unwrap();
+        let expected = std::path::PathBuf::from(home).join("wt/repo-feature-test");
+        let path = base.join("repo-feature-test").display().to_string();
+
+        assert_eq!(path, expected.display().to_string());
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_absolute_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "/tmp/{repo}-{branch_slug}", None);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.path_template must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "  \t", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.path_template must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "{repo}", Some("  \t"));
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.directory must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "{repo}", Some(""));
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.directory must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_rendered_path() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("", "{branch}", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "rendered worktree path must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_rendered_path() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("  \t", "{branch}", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "rendered worktree path must not be empty"
+        );
+    }
+
+    #[test]
+    fn expand_home_directory_requires_home_for_tilde_paths() {
+        let result = expand_home_directory_with_home("~/wt", None);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn expand_home_directory_leaves_non_tilde_paths_unchanged_without_home() {
+        let path = expand_home_directory_with_home("relative/wt", None).unwrap();
+
+        assert_eq!(path, std::path::PathBuf::from("relative/wt"));
     }
 
     #[test]

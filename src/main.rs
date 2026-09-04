@@ -9,6 +9,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
+mod config;
 mod domain;
 mod infrastructure;
 mod ui;
@@ -16,6 +17,7 @@ mod ui;
 use app::action::AppAction;
 use app::state::*;
 use app::use_cases::RepositoryUseCase;
+use config::Config;
 use infrastructure::GitCliRepository;
 use ui::constants::*;
 use ui::input::map_key_event;
@@ -56,8 +58,9 @@ impl Drop for TerminalGuard {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = Config::load()?;
     let repository = GitCliRepository::open(".")?;
-    let selected = match run_tui(&repository)? {
+    let selected = match run_tui(&repository, &config)? {
         TuiAction::Cancel => return Ok(()),
         TuiAction::Select(selected) => selected,
     };
@@ -74,6 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 fn run_tui(
     repository: &GitCliRepository,
+    config: &Config,
 ) -> Result<TuiAction, Box<dyn std::error::Error + Send + Sync>> {
     let use_case = RepositoryUseCase::new(repository);
     let branch_items = use_case.refresh_branches(true)?;
@@ -85,13 +89,14 @@ fn run_tui(
     let _terminal_guard = TerminalGuard::activate()?;
     let backend = CrosstermBackend::new(stderr());
     let mut terminal = Terminal::new(backend)?;
-    run_event_loop(&mut terminal, repository, entries)
+    run_event_loop(&mut terminal, repository, entries, config)
 }
 
 fn run_event_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     repository: &GitCliRepository,
     entries: Vec<BranchEntry>,
+    config: &Config,
 ) -> Result<TuiAction, Box<dyn std::error::Error + Send + Sync>> {
     let use_case = RepositoryUseCase::new(repository);
     let mut app = TuiApp::new(entries);
@@ -107,7 +112,7 @@ fn run_event_loop<B: ratatui::backend::Backend>(
             continue;
         }
         let action = map_key_event(key_event, &app);
-        if let Some(tui_action) = handle_action(&mut app, &use_case, action)? {
+        if let Some(tui_action) = handle_action(&mut app, &use_case, action, config)? {
             return Ok(tui_action);
         }
     }
@@ -117,6 +122,7 @@ fn handle_action(
     app: &mut TuiApp,
     use_case: &RepositoryUseCase,
     action: AppAction,
+    config: &Config,
 ) -> Result<Option<TuiAction>, Box<dyn std::error::Error + Send + Sync>> {
     match action {
         AppAction::CloseDiff => {
@@ -260,7 +266,11 @@ fn handle_action(
                 if selected.worktree_path.is_some() {
                     app.message = String::from("Branch already has a worktree");
                 } else {
-                    match use_case.get_default_worktree_path(&selected.name) {
+                    match use_case.get_worktree_path(
+                        &selected.name,
+                        &config.worktree.path_template,
+                        config.worktree.directory.as_deref(),
+                    ) {
                         Ok(path) => {
                             app.input_mode = Some(InputMode::AddWorktree {
                                 branch: selected,

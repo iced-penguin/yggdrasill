@@ -1,0 +1,14 @@
+# Copy this file to $XDG_CONFIG_HOME/yggdrasill/config.toml.
+# If XDG_CONFIG_HOME is not set, use $HOME/.config/yggdrasill/config.toml.
+# Uncomment a setting to enable it.
+
+[worktree]
+# Base directory where new worktrees are created.
+# Defaults to the directory containing the current repository, so worktrees
+# are placed next to it. A leading "~/" expands to your home directory.
+# directory = "~/worktrees"
+
+# Template for the worktree path, relative to the directory above.
+# Available placeholders: {repo}, {branch}, {branch_slug}.
+# {branch_slug} replaces / in the branch name with -.
+# path_template = "{repo}-{branch_slug}"
