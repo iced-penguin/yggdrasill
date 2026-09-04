@@ -39,7 +39,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replaces_each_placeholder_once() {
+    fn does_not_rerender_placeholder_values() {
         let result = render_template("{repo}/{branch}/{custom}", |name| match name {
             "repo" => Some("repo-{custom}"),
             "branch" => Some("feature/test"),

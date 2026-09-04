@@ -57,6 +57,13 @@ impl<'a> RepositoryUseCase<'a> {
         path_template: &str,
         base_directory: Option<&str>,
     ) -> RepositoryResult<String> {
+        if path_template.trim().is_empty() {
+            return Err("worktree.path_template must not be empty".into());
+        }
+        if base_directory.is_some_and(|directory| directory.trim().is_empty()) {
+            return Err("worktree.directory must not be empty".into());
+        }
+
         let repository_root = self.repo.repository_root()?;
         let repository_root = std::path::Path::new(&repository_root);
         let repository_name = repository_root
@@ -70,6 +77,9 @@ impl<'a> RepositoryUseCase<'a> {
             "branch_slug" => Some(&branch_slug),
             _ => None,
         })?;
+        if path.trim().is_empty() {
+            return Err("rendered worktree path must not be empty".into());
+        }
         let path = std::path::PathBuf::from(path);
         if path.is_absolute() {
             return Err("worktree.path_template must be a relative path".into());
@@ -457,6 +467,78 @@ mod tests {
         let result = use_case.get_worktree_path("feature/test", "/tmp/{repo}-{branch_slug}", None);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.path_template must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_path_template() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "  \t", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.path_template must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "{repo}", Some("  \t"));
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.directory must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_base_directory() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("feature/test", "{repo}", Some(""));
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "worktree.directory must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_empty_rendered_path() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("", "{branch}", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "rendered worktree path must not be empty"
+        );
+    }
+
+    #[test]
+    fn get_worktree_path_rejects_whitespace_only_rendered_path() {
+        let fake = FakeRepository::new(vec![]);
+        let use_case = RepositoryUseCase::new(&fake);
+        let result = use_case.get_worktree_path("  \t", "{branch}", None);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "rendered worktree path must not be empty"
+        );
     }
 
     #[test]
